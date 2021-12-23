@@ -85,32 +85,55 @@ func newSpanProcessor(counter *prometheus.CounterVec, config Config) (*spanProce
 
 func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdata.Traces, error) {
 	rss := td.ResourceSpans()
+
 	for i := 0; i < rss.Len(); i++ {
 		rs := rss.At(i)
 		ilss := rs.InstrumentationLibrarySpans()
 		resource := rs.Resource()
+
 		for j := 0; j < ilss.Len(); j++ {
 			ils := ilss.At(j)
 			spans := ils.Spans()
 			library := ils.InstrumentationLibrary()
+
 			for k := 0; k < spans.Len(); k++ {
 				s := spans.At(k)
-				if sp.skipSpanWithoutAttrs([]string{"tenant", "service"},
-					sp.include, sp.exclude, s, resource, library) {
-					tenant, _ := s.Attributes().Get("tenant")
-					service, _ := s.Attributes().Get("service")
+				remove := false
+
+				tenant, found := s.Attributes().Get("tenant")
+				if !found || !notBlank(tenant.StringVal()) {
+					remove = true
+				}
+
+				service, found := s.Attributes().Get("service")
+				if !found || !notBlank(service.StringVal()) {
+					remove = true
+				}
+
+				if remove {
 					with := prometheus.Labels{
 						"tenant":  tenant.StringVal(),
 						"service": service.StringVal(),
 					}
 					sp.counter.With(with).Inc()
+
+					spans.RemoveIf(func(spn pdata.Span) bool {
+						return s.SpanID().HexString() == spn.SpanID().HexString()
+					})
+
 					continue
 				}
+
+				if filterspan.SkipSpan(sp.include, sp.exclude, s, resource, library) {
+					continue
+				}
+
 				sp.processFromAttributes(s)
 				sp.processToAttributes(s)
 			}
 		}
 	}
+
 	return td, nil
 }
 
@@ -232,18 +255,8 @@ func (sp *spanProcessor) processToAttributes(span pdata.Span) {
 	}
 }
 
-func (sp *spanProcessor) skipSpanWithoutAttrs(
-	attrs []string, include filterspan.Matcher, exclude filterspan.Matcher, span pdata.Span,
-	resource pdata.Resource, library pdata.InstrumentationLibrary) bool {
-
-	for _, attr := range attrs {
-		value, found := span.Attributes().Get(attr)
-		if !found || !notBlankRe.MatchString(value.StringVal()) {
-			return true
-		}
-	}
-
-	return filterspan.SkipSpan(include, exclude, span, resource, library)
+func notBlank(value string) bool {
+	return notBlankRe.MatchString(value)
 }
 
 var notBlankRe = regexp.MustCompile(`[^\s]+`)
