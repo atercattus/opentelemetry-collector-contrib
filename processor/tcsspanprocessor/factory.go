@@ -16,7 +16,6 @@ package tcsspanprocessor // import "github.com/open-telemetry/opentelemetry-coll
 
 import (
 	"context"
-	"errors"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/collector/component"
@@ -31,12 +30,6 @@ const (
 )
 
 var processorCapabilities = consumer.Capabilities{MutatesData: true}
-
-// errMissingRequiredField is returned when a required field in the config
-// is not specified.
-// TODO https://github.com/open-telemetry/opentelemetry-collector/issues/215
-//	Move this to the error package that allows for span name and field to be specified.
-var errMissingRequiredField = errors.New("error creating \"tcsspan\" processor: either \"from_attributes\" or \"to_attributes\" must be specified in \"name:\"")
 
 // NewFactory returns a new factory for the Span processor.
 func NewFactory() component.ProcessorFactory {
@@ -59,21 +52,11 @@ func createTracesProcessor(
 	nextConsumer consumer.Traces,
 ) (component.TracesProcessor, error) {
 
-	// 'from_attributes' or 'to_attributes' under 'name' has to be set for the span
-	// processor to be valid. If not set and not enforced, the processor would do no work.
 	oCfg := cfg.(*Config)
-	if len(oCfg.Rename.FromAttributes) == 0 &&
-		(oCfg.Rename.ToAttributes == nil || len(oCfg.Rename.ToAttributes.Rules) == 0) {
-		return nil, errMissingRequiredField
-	}
-
 	opts := prometheus.CounterOpts{Name: "spans_without_attrs"}
 	counter := prometheus.NewCounterVec(opts, []string{"tenant", "service"})
 
-	sp, err := newSpanProcessor(counter, *oCfg)
-	if err != nil {
-		return nil, err
-	}
+	sp := newSpanProcessor(counter, *oCfg)
 
 	return processorhelper.NewTracesProcessor(
 		cfg,
