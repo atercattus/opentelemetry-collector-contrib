@@ -16,20 +16,24 @@ package tcsspanprocessor // import "github.com/open-telemetry/opentelemetry-coll
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.uber.org/zap"
 )
 
 type spanProcessor struct {
 	config  Config
 	counter *prometheus.CounterVec
+	logger  *zap.Logger
 }
 
 // newSpanProcessor returns the span processor.
-func newSpanProcessor(counter *prometheus.CounterVec, config Config) *spanProcessor {
+func newSpanProcessor(logger *zap.Logger, counter *prometheus.CounterVec, config Config) *spanProcessor {
 	return &spanProcessor{
+		logger:  logger,
 		config:  config,
 		counter: counter,
 	}
@@ -61,6 +65,9 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 				}
 
 				if remove {
+					temp := fmt.Sprintf("span %s from trace %s: ", s.SpanID(), s.TraceID())
+					sp.logger.Info(temp + "is going to be removed")
+
 					with := prometheus.Labels{
 						"tenant":  tenant.StringVal(),
 						"service": service.StringVal(),
@@ -68,7 +75,12 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 					sp.counter.With(with).Inc()
 
 					spans.RemoveIf(func(spn pdata.Span) bool {
-						return s.SpanID().HexString() == spn.SpanID().HexString()
+						rm := s.SpanID().HexString() == spn.SpanID().HexString()
+						if rm {
+							sp.logger.Info(temp + "RemoveIf returns true")
+						}
+
+						return rm
 					})
 
 					continue

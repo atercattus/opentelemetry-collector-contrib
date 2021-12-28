@@ -47,7 +47,7 @@ func createDefaultConfig() config.Processor {
 
 func createTracesProcessor(
 	_ context.Context,
-	_ component.ProcessorCreateSettings,
+	set component.ProcessorCreateSettings,
 	cfg config.Processor,
 	nextConsumer consumer.Traces,
 ) (component.TracesProcessor, error) {
@@ -56,7 +56,7 @@ func createTracesProcessor(
 	opts := prometheus.CounterOpts{Name: "spans_without_attrs"}
 	counter := prometheus.NewCounterVec(opts, []string{"tenant", "service"})
 
-	sp := newSpanProcessor(counter, *oCfg)
+	sp := newSpanProcessor(set.Logger, counter, *oCfg)
 
 	return processorhelper.NewTracesProcessor(
 		cfg,
