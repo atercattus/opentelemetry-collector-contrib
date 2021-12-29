@@ -53,9 +53,12 @@ func createTracesProcessor(
 ) (component.TracesProcessor, error) {
 
 	oCfg := cfg.(*Config)
+
 	counterVec := prometheus.NewCounterVec(
 		prometheus.CounterOpts{Name: "spans_without_attrs_vector"}, []string{"tenant", "service"})
 	counter := prometheus.NewCounter(prometheus.CounterOpts{Name: "spans_without_attrs_linear"})
+
+	prometheus.MustRegister(counter, counterVec)
 
 	sp := newSpanProcessor(set.Logger, counterVec, counter, *oCfg)
 
