@@ -17,7 +17,9 @@ package tcsspanprocessor // import "github.com/open-telemetry/opentelemetry-coll
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
+	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/collector/model/pdata"
@@ -25,22 +27,33 @@ import (
 )
 
 type spanProcessor struct {
-	config  Config
-	counter *prometheus.CounterVec
-	logger  *zap.Logger
+	config     Config
+	counterVec *prometheus.CounterVec
+	counter    prometheus.Counter
+	logger     *zap.Logger
+	logEvery   int64
 }
 
 // newSpanProcessor returns the span processor.
-func newSpanProcessor(logger *zap.Logger, counter *prometheus.CounterVec, config Config) *spanProcessor {
+func newSpanProcessor(logger *zap.Logger, counterVec *prometheus.CounterVec,
+	counter prometheus.Counter, config Config) *spanProcessor {
+	logEveryEnv := os.Getenv("LOG_EVERY")
+	logEvery, err := strconv.ParseInt(logEveryEnv, 10, 64)
+	if err != nil {
+		logger.Warn("LOG_EVERY is invalid")
+	}
 	return &spanProcessor{
-		logger:  logger,
-		config:  config,
-		counter: counter,
+		logger:     logger,
+		config:     config,
+		counterVec: counterVec,
+		counter:    counter,
+		logEvery:   logEvery,
 	}
 }
 
 func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdata.Traces, error) {
 	rss := td.ResourceSpans()
+	var logCounter int64 = 0
 
 	for i := 0; i < rss.Len(); i++ {
 		rs := rss.At(i)
@@ -65,18 +78,31 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 				}
 
 				if remove {
-					temp := fmt.Sprintf("span %s from trace %s: ", s.SpanID(), s.TraceID())
-					sp.logger.Info(temp + "is going to be removed")
+					logThisSpan := false
+					if logCounter >= sp.logEvery && sp.logEvery > 0 {
+						logThisSpan = true
+						logCounter = 0
+					} else if sp.logEvery > 0 {
+						logCounter++
+					}
+
+					temp := fmt.Sprintf(
+						"span %s from trace %s: ", s.SpanID().HexString(), s.TraceID().HexString())
+
+					if logThisSpan {
+						sp.logger.Info(temp + "is going to be removed")
+					}
 
 					with := prometheus.Labels{
 						"tenant":  tenant.StringVal(),
 						"service": service.StringVal(),
 					}
-					sp.counter.With(with).Inc()
+					sp.counterVec.With(with).Inc()
+					sp.counter.Inc()
 
 					spans.RemoveIf(func(spn pdata.Span) bool {
 						rm := s.SpanID().HexString() == spn.SpanID().HexString()
-						if rm {
+						if rm && logThisSpan {
 							sp.logger.Info(temp + "RemoveIf returns true")
 						}
 

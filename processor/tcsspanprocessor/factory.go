@@ -53,10 +53,11 @@ func createTracesProcessor(
 ) (component.TracesProcessor, error) {
 
 	oCfg := cfg.(*Config)
-	opts := prometheus.CounterOpts{Name: "spans_without_attrs"}
-	counter := prometheus.NewCounterVec(opts, []string{"tenant", "service"})
+	counterVec := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "spans_without_attrs_vector"}, []string{"tenant", "service"})
+	counter := prometheus.NewCounter(prometheus.CounterOpts{Name: "spans_without_attrs_linear"})
 
-	sp := newSpanProcessor(set.Logger, counter, *oCfg)
+	sp := newSpanProcessor(set.Logger, counterVec, counter, *oCfg)
 
 	return processorhelper.NewTracesProcessor(
 		cfg,
