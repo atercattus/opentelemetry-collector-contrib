@@ -53,7 +53,7 @@ func newSpanProcessor(logger *zap.Logger, counterVec *prometheus.CounterVec,
 
 func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdata.Traces, error) {
 	rss := td.ResourceSpans()
-	var logCounter int64 = 0
+	var logCounter int64
 
 	for i := 0; i < rss.Len(); i++ {
 		rs := rss.At(i)
