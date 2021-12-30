@@ -62,6 +62,7 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 		for j := 0; j < ilss.Len(); j++ {
 			ils := ilss.At(j)
 			spans := ils.Spans()
+			var idsToRemove []string
 
 			for k := 0; k < spans.Len(); k++ {
 				s := spans.At(k)
@@ -90,7 +91,7 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 						"span %s from trace %s: ", s.SpanID().HexString(), s.TraceID().HexString())
 
 					if logThisSpan {
-						sp.logger.Info(temp + "is going to be removed")
+						sp.logger.Info(temp + "will be removed")
 					}
 
 					with := prometheus.Labels{
@@ -100,18 +101,20 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 					sp.counterVec.With(with).Inc()
 					sp.counter.Inc()
 
-					spans.RemoveIf(func(spn pdata.Span) bool {
-						rm := s.SpanID().HexString() == spn.SpanID().HexString()
-						if rm && logThisSpan {
-							sp.logger.Info(temp + "RemoveIf returns true")
-						}
-
-						return rm
-					})
-
+					idsToRemove = append(idsToRemove, s.SpanID().HexString())
 					continue
 				}
 			}
+
+			spans.RemoveIf(func(spn pdata.Span) bool {
+				for _, id := range idsToRemove {
+					if id == spn.SpanID().HexString() {
+						return true
+					}
+				}
+
+				return false
+			})
 		}
 	}
 
