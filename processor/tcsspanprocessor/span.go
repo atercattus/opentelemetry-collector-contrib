@@ -16,14 +16,15 @@ package tcsspanprocessor // import "github.com/open-telemetry/opentelemetry-coll
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.uber.org/zap"
 )
 
@@ -32,7 +33,9 @@ type spanProcessor struct {
 	counterVec *prometheus.CounterVec
 	counter    prometheus.Counter
 	logger     *zap.Logger
-	logEvery   int64
+
+	logEvery        int64
+	logEveryCounter int64
 }
 
 // newSpanProcessor returns the span processor.
@@ -54,83 +57,48 @@ func newSpanProcessor(logger *zap.Logger, counterVec *prometheus.CounterVec,
 
 func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdata.Traces, error) {
 	rss := td.ResourceSpans()
-	var logCounter int64
 
 	for i := 0; i < rss.Len(); i++ {
 		rs := rss.At(i)
-		ilss := rs.InstrumentationLibrarySpans()
 
-		for j := 0; j < ilss.Len(); j++ {
-			ils := ilss.At(j)
-			spans := ils.Spans()
-			var idsToRemove []string
-
-			for k := 0; k < spans.Len(); k++ {
-				s := spans.At(k)
-				remove := false
-
-				attributes := s.Attributes()
-				tenant, found := attributes.Get("tenant")
-				if !found || !notBlank(tenant.StringVal()) {
-					remove = true
-				}
-
-				service, found := attributes.Get("service")
-				if !found || !notBlank(service.StringVal()) {
-					remove = true
-				}
-
-				if remove {
-					logThisSpan := false
-					if sp.logEvery > 0 {
-						logCounter++
-						if logCounter >= sp.logEvery {
-							logThisSpan = true
-							logCounter = 0
-						}
-					}
-
-					if logThisSpan {
-						spanJs, _ := json.Marshal(attributes.AsRaw())
-
-						sp.logger.Info(fmt.Sprintf(
-							"will be removed span %s from trace %s (tenant:%q service:%q) (attributes: %s)",
-							s.SpanID().HexString(),
-							s.TraceID().HexString(),
-							tenant.StringVal(),
-							service.StringVal(),
-							spanJs,
-						))
-					}
-
-					sp.counterVec.
-						WithLabelValues(tenant.StringVal(), service.StringVal()).
-						Inc()
-
-					sp.counter.Inc()
-
-					idsToRemove = append(idsToRemove, s.SpanID().HexString())
-					continue
-				}
+		dtracingTenant := ""
+		dtracingService := ""
+		rs.Resource().Attributes().Range(func(k string, v pdata.AttributeValue) bool {
+			switch attribute.Key(k) {
+			case semconv.ServiceNamespaceKey:
+				dtracingTenant = strings.TrimSpace(v.AsString())
+			case semconv.ServiceNameKey:
+				dtracingService = strings.TrimSpace(v.AsString())
 			}
+			return true
+		})
 
-			spans.RemoveIf(func(spn pdata.Span) bool {
-				for _, id := range idsToRemove {
-					if id == spn.SpanID().HexString() {
-						return true
-					}
-				}
-
-				return false
-			})
+		if (dtracingTenant != "") && (dtracingService != "") {
+			continue
 		}
+
+		cnt := float64(rs.InstrumentationLibrarySpans().Len())
+		sp.counterVec.WithLabelValues(dtracingTenant, dtracingService).Add(cnt)
+		sp.counter.Add(cnt)
+
+		if sp.logEvery > 0 {
+			sp.logEveryCounter++
+			if sp.logEveryCounter == sp.logEvery {
+				sp.logEveryCounter = 0
+
+				sp.logger.Info(fmt.Sprintf(
+					"will be removed %d spans (tenant:%q service:%q)",
+					int(cnt),
+					dtracingTenant,
+					dtracingService,
+				))
+			}
+		}
+
+		rss.RemoveIf(func(pdata.ResourceSpans) bool {
+			return true
+		})
 	}
 
 	return td, nil
 }
-
-func notBlank(value string) bool {
-	return notBlankRe.MatchString(value)
-}
-
-var notBlankRe = regexp.MustCompile(`[^\s]+`)
