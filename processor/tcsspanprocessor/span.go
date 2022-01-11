@@ -16,6 +16,7 @@ package tcsspanprocessor // import "github.com/open-telemetry/opentelemetry-coll
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -68,37 +69,44 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 				s := spans.At(k)
 				remove := false
 
-				tenant, found := s.Attributes().Get("tenant")
+				attributes := s.Attributes()
+				tenant, found := attributes.Get("tenant")
 				if !found || !notBlank(tenant.StringVal()) {
 					remove = true
 				}
 
-				service, found := s.Attributes().Get("service")
+				service, found := attributes.Get("service")
 				if !found || !notBlank(service.StringVal()) {
 					remove = true
 				}
 
 				if remove {
 					logThisSpan := false
-					if logCounter >= sp.logEvery && sp.logEvery > 0 {
-						logThisSpan = true
-						logCounter = 0
-					} else if sp.logEvery > 0 {
+					if sp.logEvery > 0 {
 						logCounter++
+						if logCounter >= sp.logEvery {
+							logThisSpan = true
+							logCounter = 0
+						}
 					}
-
-					temp := fmt.Sprintf(
-						"span %s from trace %s: ", s.SpanID().HexString(), s.TraceID().HexString())
 
 					if logThisSpan {
-						sp.logger.Info(temp + "will be removed")
+						spanJs, _ := json.Marshal(attributes.AsRaw())
+
+						sp.logger.Info(fmt.Sprintf(
+							"will be removed span %s from trace %s (tenant:%q service:%q) (attributes: %s)",
+							s.SpanID().HexString(),
+							s.TraceID().HexString(),
+							tenant.StringVal(),
+							service.StringVal(),
+							spanJs,
+						))
 					}
 
-					with := prometheus.Labels{
-						"tenant":  tenant.StringVal(),
-						"service": service.StringVal(),
-					}
-					sp.counterVec.With(with).Inc()
+					sp.counterVec.
+						WithLabelValues(tenant.StringVal(), service.StringVal()).
+						Inc()
+
 					sp.counter.Inc()
 
 					idsToRemove = append(idsToRemove, s.SpanID().HexString())
