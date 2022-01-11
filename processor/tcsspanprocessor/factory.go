@@ -55,8 +55,11 @@ func createTracesProcessor(
 	oCfg := cfg.(*Config)
 
 	counterVec := prometheus.NewCounterVec(
-		prometheus.CounterOpts{Name: "spans_without_attrs_vector"}, []string{"tenant", "service"})
-	counter := prometheus.NewCounter(prometheus.CounterOpts{Name: "spans_without_attrs_linear"})
+		prometheus.CounterOpts{Name: "spans_without_attrs_vector"}, []string{"dtracing_tenant", "dtracing_service"},
+	)
+	counter := prometheus.NewCounter(
+		prometheus.CounterOpts{Name: "spans_without_attrs_linear"},
+	)
 
 	prometheus.MustRegister(counter, counterVec)
 
