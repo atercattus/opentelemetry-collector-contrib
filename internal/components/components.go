@@ -116,6 +116,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcplogreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcsotlpreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/udplogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/wavefrontreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
@@ -192,6 +193,7 @@ func Components() (component.Factories, error) {
 		zookeeperreceiver.NewFactory(),
 		syslogreceiver.NewFactory(),
 		tcplogreceiver.NewFactory(),
+		tcsotlpreceiver.NewFactory(),
 		udplogreceiver.NewFactory(),
 		zipkinreceiver.NewFactory(),
 	}

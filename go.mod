@@ -3,6 +3,8 @@ module github.com/open-telemetry/opentelemetry-collector-contrib
 go 1.17
 
 require (
+	github.com/gogo/protobuf v1.3.2
+	github.com/gorilla/mux v1.8.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alibabacloudlogserviceexporter v0.40.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsemfexporter v0.40.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awskinesisexporter v0.40.0
@@ -51,6 +53,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.40.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage v0.40.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.40.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.40.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.40.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.40.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.40.0
@@ -114,6 +117,8 @@ require (
 	go.opentelemetry.io/otel v1.2.0
 	go.uber.org/zap v1.19.1
 	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359
+	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c
+	google.golang.org/grpc v1.42.0
 )
 
 require (
@@ -208,7 +213,6 @@ require (
 	github.com/godbus/dbus/v5 v5.0.4 // indirect
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -221,7 +225,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/gophercloud/gophercloud v0.18.0 // indirect
-	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grobie/gomemcache v0.0.0-20180201122607-1f779c573665 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/hashicorp/consul/api v1.10.1 // indirect
@@ -300,7 +303,6 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/docker v0.40.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.40.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/kubelet v0.40.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.40.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/splunk v0.40.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/stanza v0.40.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchperresourceattr v0.40.0 // indirect
@@ -403,8 +405,6 @@ require (
 	gonum.org/v1/gonum v0.9.3 // indirect
 	google.golang.org/api v0.60.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c // indirect
-	google.golang.org/grpc v1.42.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.34.0 // indirect
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0 // indirect
@@ -642,6 +642,9 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostm
 replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver => ./receiver/syslogreceiver
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcplogreceiver => ./receiver/tcplogreceiver
+
+// TCS
+replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcsotlpreceiver => ./receiver/tcsotlpreceiver
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/udplogreceiver => ./receiver/udplogreceiver
 
