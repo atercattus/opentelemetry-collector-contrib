@@ -16,6 +16,7 @@ package trace // import "github.com/open-telemetry/opentelemetry-collector-contr
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -40,6 +41,7 @@ type Receiver struct {
 	logger       *zap.Logger
 	nextConsumer consumer.Traces
 	obsrecv      *obsreport.Receiver
+	mutex        sync.Mutex
 
 	collectorMinDuration   time.Duration // минимальное количество времени между запросами (1 / rps)
 	collectorLastRequestAt time.Time     // время последнего запроса
@@ -95,10 +97,25 @@ func (r *Receiver) Export(ctx context.Context,
 		ctx = client.NewContext(ctx, c)
 	}
 
+	if !r.floodControl(td) {
+		return otlpgrpc.NewTracesResponse(), nil
+	}
+
+	ctx = r.obsrecv.StartTracesOp(ctx)
+	err := r.nextConsumer.ConsumeTraces(ctx, td)
+	r.obsrecv.EndTracesOp(ctx, dataFormatProtobuf, numSpans, err)
+
+	return otlpgrpc.NewTracesResponse(), err
+}
+
+func (r *Receiver) floodControl(td pdata.Traces) (pass bool) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
 	now := time.Now()
 	if now.Sub(r.collectorLastRequestAt) < r.collectorMinDuration {
 		r.collectorCounter.Inc()
-		return otlpgrpc.NewTracesResponse(), nil
+		return false
 	}
 
 	tenantsToUpdate := make([]string, 0)
@@ -118,7 +135,7 @@ func (r *Receiver) Export(ctx context.Context,
 	})
 
 	if len(tenantsToUpdate) == 0 {
-		return otlpgrpc.NewTracesResponse(), nil
+		return false
 	}
 
 	pairsToUpdate := make([]string, 0)
@@ -141,7 +158,7 @@ func (r *Receiver) Export(ctx context.Context,
 	})
 
 	if len(pairsToUpdate) == 0 {
-		return otlpgrpc.NewTracesResponse(), nil
+		return false
 	}
 
 	r.collectorLastRequestAt = now
@@ -152,9 +169,5 @@ func (r *Receiver) Export(ctx context.Context,
 		r.tenantServiceLastRequestAt[upd] = now
 	}
 
-	ctx = r.obsrecv.StartTracesOp(ctx)
-	err := r.nextConsumer.ConsumeTraces(ctx, td)
-	r.obsrecv.EndTracesOp(ctx, dataFormatProtobuf, numSpans, err)
-
-	return otlpgrpc.NewTracesResponse(), err
+	return true
 }
