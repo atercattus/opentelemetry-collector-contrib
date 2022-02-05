@@ -35,6 +35,9 @@ type Config struct {
 	// The name of the kafka topic to export to (default otlp_spans for traces, otlp_metrics for metrics)
 	Topic string `mapstructure:"topic"`
 
+	// Sarama logging level: debug, std, none (default "none")
+	Logging string `mapstructure:"logging"`
+
 	// Encoding of messages (default "otlp_proto")
 	Encoding string `mapstructure:"encoding"`
 
