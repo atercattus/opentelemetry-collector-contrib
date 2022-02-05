@@ -30,6 +30,7 @@ const (
 	defaultMetricsTopic = "otlp_metrics"
 	defaultLogsTopic    = "otlp_logs"
 	defaultEncoding     = "otlp_proto"
+	defaultLogging      = "none"
 	defaultBroker       = "localhost:9092"
 	// default from sarama.NewConfig()
 	defaultMetadataRetryMax = 3
@@ -81,6 +82,7 @@ func createDefaultConfig() config.Exporter {
 		Brokers:          []string{defaultBroker},
 		// using an empty topic to track when it has not been set by user, default is based on traces or metrics.
 		Topic:    "",
+		Logging:  defaultLogging,
 		Encoding: defaultEncoding,
 		Metadata: Metadata{
 			Full: defaultMetadataFull,

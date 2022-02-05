@@ -17,6 +17,8 @@ package kafkaexporter // import "github.com/open-telemetry/opentelemetry-collect
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 
 	"github.com/Shopify/sarama"
 	"go.opentelemetry.io/collector/component"
@@ -154,6 +156,10 @@ func newSaramaProducer(config Config) (sarama.SyncProducer, error) {
 }
 
 func newMetricsExporter(config Config, set component.ExporterCreateSettings, marshalers map[string]MetricsMarshaler) (*kafkaMetricsProducer, error) {
+	if err := setupSaramaLogger(config, set); err != nil {
+		return nil, err
+	}
+
 	marshaler := marshalers[config.Encoding]
 	if marshaler == nil {
 		return nil, errUnrecognizedEncoding
@@ -174,6 +180,10 @@ func newMetricsExporter(config Config, set component.ExporterCreateSettings, mar
 
 // newTracesExporter creates Kafka exporter.
 func newTracesExporter(config Config, set component.ExporterCreateSettings, marshalers map[string]TracesMarshaler) (*kafkaTracesProducer, error) {
+	if err := setupSaramaLogger(config, set); err != nil {
+		return nil, err
+	}
+
 	marshaler := marshalers[config.Encoding]
 	if marshaler == nil {
 		return nil, errUnrecognizedEncoding
@@ -182,6 +192,7 @@ func newTracesExporter(config Config, set component.ExporterCreateSettings, mars
 	if err != nil {
 		return nil, err
 	}
+
 	return &kafkaTracesProducer{
 		producer:  producer,
 		topic:     config.Topic,
@@ -191,6 +202,10 @@ func newTracesExporter(config Config, set component.ExporterCreateSettings, mars
 }
 
 func newLogsExporter(config Config, set component.ExporterCreateSettings, marshalers map[string]LogsMarshaler) (*kafkaLogsProducer, error) {
+	if err := setupSaramaLogger(config, set); err != nil {
+		return nil, err
+	}
+
 	marshaler := marshalers[config.Encoding]
 	if marshaler == nil {
 		return nil, errUnrecognizedEncoding
@@ -206,5 +221,20 @@ func newLogsExporter(config Config, set component.ExporterCreateSettings, marsha
 		marshaler: marshaler,
 		logger:    set.Logger,
 	}, nil
+}
 
+func setupSaramaLogger(config Config, set component.ExporterCreateSettings) error {
+	switch config.Logging {
+	case "std":
+		sarama.DebugLogger = log.New(io.Discard, "", 0)
+		fallthrough
+	case "debug":
+		sarama.Logger = NewSaramaLogger(set.Logger)
+	case "none":
+		// pass
+	default:
+		return fmt.Errorf(`invalid Logging mode %q: can be either "debug", "std" or "none"`, config.Logging)
+	}
+
+	return nil
 }
