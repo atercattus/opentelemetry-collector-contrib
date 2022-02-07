@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"fmt"
+	"os"
 
 	"github.com/Shopify/sarama"
 	"go.opentelemetry.io/collector/config/configtls"
@@ -102,11 +103,17 @@ func configurePlaintext(config PlainTextConfig, saramaConfig *sarama.Config) {
 func configureSASL(config SASLConfig, saramaConfig *sarama.Config) error {
 
 	if config.Username == "" {
-		return fmt.Errorf("username have to be provided")
+		config.Username, _ = os.LookupEnv("KAFKA_SASL_USERNAME")
+	}
+	if config.Username == "" {
+		return fmt.Errorf("username or KAFKA_SASL_USERNAME env have to be provided")
 	}
 
 	if config.Password == "" {
-		return fmt.Errorf("password have to be provided")
+		config.Password, _ = os.LookupEnv("KAFKA_SASL_PASSWORD")
+	}
+	if config.Password == "" {
+		return fmt.Errorf("password or KAFKA_SASL_PASSWORD env have to be provided")
 	}
 
 	saramaConfig.Net.SASL.Enable = true
