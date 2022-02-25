@@ -74,6 +74,7 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 		})
 
 		if (dtracingTenant != "") && (dtracingService != "") {
+			sp.enrichByEnv(rs)
 			continue
 		}
 
@@ -101,4 +102,12 @@ func (sp *spanProcessor) processTraces(_ context.Context, td pdata.Traces) (pdat
 	}
 
 	return td, nil
+}
+
+func (sp *spanProcessor) enrichByEnv(rs pdata.ResourceSpans) {
+	if sp.config.Environment == "" {
+		return
+	}
+
+	rs.Resource().Attributes().InsertString(string(semconv.DeploymentEnvironmentKey), sp.config.Environment)
 }
