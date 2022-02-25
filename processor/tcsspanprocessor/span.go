@@ -109,5 +109,5 @@ func (sp *spanProcessor) enrichByEnv(rs pdata.ResourceSpans) {
 		return
 	}
 
-	rs.Resource().Attributes().InsertString(string(semconv.DeploymentEnvironmentKey), sp.config.Environment)
+	rs.Resource().Attributes().InsertString("collector.env", sp.config.Environment)
 }
