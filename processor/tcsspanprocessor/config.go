@@ -14,7 +14,9 @@
 
 package tcsspanprocessor // import "github.com/open-telemetry/opentelemetry-collector-contrib/processor/tcsspanprocessor"
 
-import "go.opentelemetry.io/collector/config"
+import (
+	"go.opentelemetry.io/collector/config"
+)
 
 // Config is the configuration for the span processor.
 // Prior to any actions being applied, each span is compared against
@@ -22,6 +24,9 @@ import "go.opentelemetry.io/collector/config"
 // This determines if a span is to be processed or not.
 type Config struct {
 	config.ProcessorSettings `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct
+	// Environment is a collector environment like a "dev2", "prod", etc.
+	// If set, "deployment.environment" attribute will be added to every span.
+	Environment string `mapstructure:"env"`
 }
 
 var _ config.Processor = (*Config)(nil)
