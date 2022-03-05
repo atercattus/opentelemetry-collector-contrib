@@ -8,9 +8,10 @@ Config defines configuration for OTLP receiver.
 | Name | Type | Default | Docs |
 | ---- | ---- | ------- | ---- |
 | protocols |[otlpreceiver-Protocols](#otlpreceiver-Protocols)| <no value> | Protocols is the configuration for the supported protocols, currently gRPC and HTTP (Proto and JSON).  |
-| collector_rps | uint | 0 | RPS limitation per collector (resources are kicked out). If not provided (or 0 is set), then the limitation is disabled. |
-| tenant_rps | uint | 0 | RPS limitation per tenant (resources are kicked out). If not provided (or 0 is set), then the limitation is disabled. |
-| tenant_service_rps | uint | 0 | RPS limitation per tenant + service pair (resources are kicked out). If not provided (or 0 is set), then the limitation is disabled. |
+| collector_tps | uint | 0 | TPS limitation per collector (resources are kicked out). If not provided (or 0 is set), then the limitation is disabled. |
+| tenant_tps | uint | 0 | TPS limitation per tenant (resources are kicked out). If not provided (or 0 is set), then the limitation is disabled. |
+| tenant_service_tps | uint | 0 | TPS limitation per tenant + service pair (resources are kicked out). If not provided (or 0 is set), then the limitation is disabled. |
+| quota_adapter_api_url | string | "" | URL to system quota API in quota adapter. |
 
 ### otlpreceiver-Protocols
 

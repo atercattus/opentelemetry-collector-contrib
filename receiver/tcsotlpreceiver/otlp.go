@@ -193,32 +193,25 @@ func (r *otlpReceiver) registerTraceConsumer(tc consumer.Traces) error {
 
 	prometheus.MustRegister(collectorCounter, tenantCounter, tenantServiceCounter)
 
-	collectorMinDuration := time.Duration(0)
-	if r.cfg.CollectorRPS != 0 {
-		collectorMinDuration = time.Second / time.Duration(r.cfg.CollectorRPS)
-	}
-
-	tenantMinDuration := time.Duration(0)
-	if r.cfg.TenantRPS != 0 {
-		tenantMinDuration = time.Second / time.Duration(r.cfg.TenantRPS)
-	}
-
-	tenantServiceMinDuration := time.Duration(0)
-	if r.cfg.TenantServiceRPS != 0 {
-		tenantServiceMinDuration = time.Second / time.Duration(r.cfg.TenantServiceRPS)
-	}
-
-	r.traceReceiver = trace.New(
+	tr, err := trace.New(
 		r.cfg.ID(),
 		tc,
 		r.settings,
-		collectorMinDuration,
-		tenantMinDuration,
-		tenantServiceMinDuration,
+		&http.Client{Timeout: 15 * time.Second},
+		r.cfg.QuotaAdapterAPIURL,
+		r.cfg.CollectorTPS,
+		r.cfg.TenantTPS,
+		r.cfg.TenantServiceTPS,
 		collectorCounter,
 		tenantCounter,
 		tenantServiceCounter,
 	)
+
+	if err != nil {
+		return err
+	}
+
+	r.traceReceiver = tr
 
 	if r.httpMux != nil {
 		r.httpMux.HandleFunc("/v1/traces", func(resp http.ResponseWriter, req *http.Request) {
