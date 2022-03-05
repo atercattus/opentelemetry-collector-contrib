@@ -193,7 +193,7 @@ func (r *otlpReceiver) registerTraceConsumer(tc consumer.Traces) error {
 
 	prometheus.MustRegister(collectorCounter, tenantCounter, tenantServiceCounter)
 
-	r.traceReceiver = trace.New(
+	tr, err := trace.New(
 		r.cfg.ID(),
 		tc,
 		r.settings,
@@ -206,6 +206,12 @@ func (r *otlpReceiver) registerTraceConsumer(tc consumer.Traces) error {
 		tenantCounter,
 		tenantServiceCounter,
 	)
+
+	if err != nil {
+		return err
+	}
+
+	r.traceReceiver = tr
 
 	if r.httpMux != nil {
 		r.httpMux.HandleFunc("/v1/traces", func(resp http.ResponseWriter, req *http.Request) {

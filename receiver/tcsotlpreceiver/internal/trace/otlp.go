@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"path"
+	"net/url"
 	"sync"
 	"time"
 
@@ -49,7 +49,7 @@ type Receiver struct {
 	obsrecv      *obsreport.Receiver
 	mutex        sync.Mutex
 	client       *http.Client
-	url          string
+	url          *url.URL
 
 	collectorTPS           uint
 	collectorMinDuration   time.Duration
@@ -70,9 +70,14 @@ type Receiver struct {
 // New creates a new Receiver reference.
 func New(
 	id config.ComponentID, nextConsumer consumer.Traces, set component.ReceiverCreateSettings,
-	client *http.Client, url string, collectorTPS, tenantTPS, tenantServiceTPS uint,
+	client *http.Client, apiURL string, collectorTPS, tenantTPS, tenantServiceTPS uint,
 	collectorCounter prometheus.Counter, tenantCounter, tenantServiceCounter *prometheus.CounterVec,
-) *Receiver {
+) (*Receiver, error) {
+	u, err := url.Parse(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("tcsotlp receiver: new: %w", err)
+	}
+
 	recv := &Receiver{
 		logger:       set.Logger,
 		nextConsumer: nextConsumer,
@@ -94,12 +99,12 @@ func New(
 		tenantServiceCounter:       tenantServiceCounter,
 
 		client: client,
-		url:    url,
+		url:    u,
 	}
 
 	go recv.startSyncingQuotas()
 
-	return recv
+	return recv, nil
 }
 
 // Export implements the service Export traces func.
@@ -197,7 +202,7 @@ func (r *Receiver) startSyncingQuotas() {
 	for {
 		qt, err := r.getQuotas()
 		if err != nil {
-			r.logger.Error("otlp receiver: start syncing quotas: sync quotas: " + err.Error())
+			r.logger.Error("tcsotlp receiver: start syncing quotas: sync quotas: " + err.Error())
 			time.Sleep(15 * time.Second)
 			continue
 		}
@@ -223,7 +228,7 @@ func (r *Receiver) syncQuotas(qt quotas) {
 }
 
 func (r *Receiver) getQuotas() (quotas, error) {
-	resp, err := r.client.Post(path.Join(r.url, "/get-resources"),
+	resp, err := r.client.Post(r.url.String() + "/get-resources",
 		"application/json", bytes.NewReader([]byte(`{"systemId": "dtracing"}`)))
 	if err != nil {
 		return quotas{}, fmt.Errorf("get quotas: send request: %w", err)
