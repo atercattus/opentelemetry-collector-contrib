@@ -41,9 +41,10 @@ type Config struct {
 	// Protocols is the configuration for the supported protocols, currently gRPC and HTTP (Proto and JSON).
 	Protocols `mapstructure:"protocols"`
 
-	CollectorRPS     uint `mapstructure:"collector_rps"`
-	TenantRPS        uint `mapstructure:"tenant_rps"`
-	TenantServiceRPS uint `mapstructure:"tenant_service_rps"`
+	CollectorTPS       uint   `mapstructure:"collector_tps"`
+	TenantTPS          uint   `mapstructure:"tenant_tps"`
+	TenantServiceTPS   uint   `mapstructure:"tenant_service_tps"`
+	QuotaAdapterAPIURL string `mapstructure:"quota_adapter_api_url"`
 }
 
 var _ config.Receiver = (*Config)(nil)

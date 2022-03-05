@@ -15,7 +15,13 @@
 package trace // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcsotlpreceiver/internal/trace"
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"path"
 	"sync"
 	"time"
 
@@ -42,15 +48,20 @@ type Receiver struct {
 	nextConsumer consumer.Traces
 	obsrecv      *obsreport.Receiver
 	mutex        sync.Mutex
+	client       *http.Client
+	url          string
 
-	collectorMinDuration   time.Duration // минимальное количество времени между запросами (1 / rps)
-	collectorLastRequestAt time.Time     // время последнего запроса
+	collectorTPS           uint
+	collectorMinDuration   time.Duration
+	collectorLastRequestAt time.Time
 	collectorCounter       prometheus.Counter
 
+	tenantTPS           uint
 	tenantMinDuration   time.Duration
 	tenantLastRequestAt map[string]time.Time
 	tenantCounter       *prometheus.CounterVec
 
+	tenantServiceTPS           uint
 	tenantServiceMinDuration   time.Duration
 	tenantServiceLastRequestAt map[string]time.Time
 	tenantServiceCounter       *prometheus.CounterVec
@@ -59,10 +70,10 @@ type Receiver struct {
 // New creates a new Receiver reference.
 func New(
 	id config.ComponentID, nextConsumer consumer.Traces, set component.ReceiverCreateSettings,
-	collectorMinDuration, tenantMinDuration, tenantServiceMinDuration time.Duration,
+	client *http.Client, url string, collectorTPS, tenantTPS, tenantServiceTPS uint,
 	collectorCounter prometheus.Counter, tenantCounter, tenantServiceCounter *prometheus.CounterVec,
 ) *Receiver {
-	return &Receiver{
+	recv := &Receiver{
 		logger:       set.Logger,
 		nextConsumer: nextConsumer,
 		obsrecv: obsreport.NewReceiver(obsreport.ReceiverSettings{
@@ -70,15 +81,25 @@ func New(
 			Transport:              receiverTransport,
 			ReceiverCreateSettings: set,
 		}),
-		collectorMinDuration:       collectorMinDuration,
+		collectorTPS:               collectorTPS,
+		collectorMinDuration:       calculateMinDuration(collectorTPS),
 		collectorCounter:           collectorCounter,
-		tenantMinDuration:          tenantMinDuration,
+		tenantTPS:                  tenantTPS,
+		tenantMinDuration:          calculateMinDuration(tenantTPS),
 		tenantLastRequestAt:        make(map[string]time.Time),
 		tenantCounter:              tenantCounter,
-		tenantServiceMinDuration:   tenantServiceMinDuration,
+		tenantServiceTPS:           tenantServiceTPS,
+		tenantServiceMinDuration:   calculateMinDuration(tenantServiceTPS),
 		tenantServiceLastRequestAt: make(map[string]time.Time),
 		tenantServiceCounter:       tenantServiceCounter,
+
+		client: client,
+		url:    url,
 	}
+
+	go recv.startSyncingQuotas()
+
+	return recv
 }
 
 // Export implements the service Export traces func.
@@ -170,4 +191,111 @@ func (r *Receiver) floodControl(td pdata.Traces) (pass bool) {
 	}
 
 	return true
+}
+
+func (r *Receiver) startSyncingQuotas() {
+	for {
+		qt, err := r.getQuotas()
+		if err != nil {
+			r.logger.Error("otlp receiver: start syncing quotas: sync quotas: " + err.Error())
+			time.Sleep(15 * time.Second)
+			continue
+		}
+
+		r.syncQuotas(qt)
+
+		time.Sleep(time.Minute)
+	}
+}
+
+func (r *Receiver) syncQuotas(qt quotas) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	r.collectorTPS = qt.CollectorTPS
+	r.collectorMinDuration = calculateMinDuration(qt.CollectorTPS)
+
+	r.tenantTPS = qt.TenantTPS
+	r.tenantMinDuration = calculateMinDuration(qt.TenantTPS)
+
+	r.tenantServiceTPS = qt.TenantServiceTPS
+	r.tenantServiceMinDuration = calculateMinDuration(qt.TenantServiceTPS)
+}
+
+func (r *Receiver) getQuotas() (quotas, error) {
+	resp, err := r.client.Post(path.Join(r.url, "/get-resources"),
+		"application/json", bytes.NewReader([]byte(`{"systemId": "dtracing"}`)))
+	if err != nil {
+		return quotas{}, fmt.Errorf("get quotas: send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return quotas{}, fmt.Errorf("get quotas: parse body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return quotas{}, fmt.Errorf(
+			"get quotas: status code = %d and body = %s",
+			resp.StatusCode, body,
+		)
+	}
+
+	resources := make([]resource, 0)
+	if err := json.Unmarshal(body, &resources); err != nil {
+		return quotas{}, fmt.Errorf("get quotas: unmarshal response: %w", err)
+	}
+
+	var qt quotas
+	found := 0
+
+	for _, res := range resources {
+		if res.ID == "collector-tps" {
+			qt.CollectorTPS = res.QuotaValue
+			found++
+		}
+
+		if res.ID == "tenant-tps" {
+			qt.TenantTPS = res.QuotaValue
+			found++
+		}
+
+		if res.ID == "tenant-service-tps" {
+			qt.TenantServiceTPS = res.QuotaValue
+			found++
+		}
+	}
+
+	if found != 3 {
+		return quotas{}, fmt.Errorf(
+			"get quotas: found %d but not 3 resources in body %s",
+			found, body,
+		)
+	}
+
+	return qt, nil
+}
+
+type quotas struct {
+	CollectorTPS     uint
+	TenantTPS        uint
+	TenantServiceTPS uint
+}
+
+type resource struct {
+	ID             string
+	Name           string
+	QuotaName      string
+	QuotaValue     uint
+	ValidationRule string
+}
+
+func calculateMinDuration(tps uint) time.Duration {
+	minDuration := time.Duration(0)
+	if tps != 0 {
+		minDuration = time.Second / time.Duration(tps)
+	}
+
+	return minDuration
 }
