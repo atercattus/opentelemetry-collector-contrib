@@ -207,6 +207,13 @@ func (r *Receiver) startSyncingQuotas() {
 			continue
 		}
 
+		msg := fmt.Sprintf(
+			"tcsotlp receiver: start syncing quotas: quotas received: " +
+			"collector tps = %d and tenant tps = %d and tenant service tps = %d",
+			qt.CollectorTPS, qt.TenantTPS, qt.TenantServiceTPS,
+		)
+		r.logger.Info(msg)
+
 		r.syncQuotas(qt)
 
 		time.Sleep(time.Minute)
