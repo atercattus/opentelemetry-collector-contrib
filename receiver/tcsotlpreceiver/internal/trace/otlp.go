@@ -119,6 +119,20 @@ func (r *Receiver) Export(ctx context.Context,
 		return otlpgrpc.NewTracesResponse(), nil
 	}
 
+	for i := 0; i < td.ResourceSpans().Len(); i++ {
+		rs := td.ResourceSpans().At(i)
+
+		tenantValue, _ := rs.Resource().Attributes().Get(string(semconv.ServiceNamespaceKey))
+		tenant := tenantValue.StringVal()
+		serviceValue, _ := rs.Resource().Attributes().Get(string(semconv.ServiceNameKey))
+		service := serviceValue.StringVal()
+
+		if tenant == "sme-rko-payments" || service == "payments-feeds-api" || tenant == "" || service == "" {
+			js, _ := req.MarshalJSON()
+			r.logger.Named("receiver-debug").Info(fmt.Sprintf("got span#%d with tenant %q and service %q: %s", i, tenant, service, js))
+		}
+	}
+
 	if c, ok := client.FromGRPC(ctx); ok {
 		ctx = client.NewContext(ctx, c)
 	}
@@ -208,8 +222,8 @@ func (r *Receiver) startSyncingQuotas() {
 		}
 
 		msg := fmt.Sprintf(
-			"tcsotlp receiver: start syncing quotas: quotas received: " +
-			"collector tps = %d and tenant tps = %d and tenant service tps = %d",
+			"tcsotlp receiver: start syncing quotas: quotas received: "+
+				"collector tps = %d and tenant tps = %d and tenant service tps = %d",
 			qt.CollectorTPS, qt.TenantTPS, qt.TenantServiceTPS,
 		)
 		r.logger.Info(msg)
@@ -235,7 +249,7 @@ func (r *Receiver) syncQuotas(qt quotas) {
 }
 
 func (r *Receiver) getQuotas() (quotas, error) {
-	resp, err := r.client.Post(r.url.String() + "/get-resources",
+	resp, err := r.client.Post(r.url.String()+"/get-resources",
 		"application/json", bytes.NewReader([]byte(`{"systemId": "dtracing"}`)))
 	if err != nil {
 		return quotas{}, fmt.Errorf("get quotas: send request: %w", err)
